@@ -1,7 +1,7 @@
 // ============================================================
 // ManifestTools Telegram Bot
 // Rocket Way // 20.05.2026
-// + Force Subscribe + My Keys
+// Channel: -4334184638
 // ============================================================
 
 const { Telegraf, Markup } = require('telegraf');
@@ -12,7 +12,7 @@ const ADMIN_ID    = parseInt(process.env.ADMIN_ID || '8640716370');
 const API_URL     = process.env.API_URL     || 'https://manifest-keys-1.onrender.com';
 const BOT_SECRET  = process.env.BOT_SECRET  || 'Manifest_tools_key_1120';
 const CARD_NUMBER = process.env.CARD_NUMBER || '2203 8302 7007 4520';
-const CHANNEL     = process.env.CHANNEL     || '@manifest_tools_news';
+const CHANNEL     = process.env.CHANNEL     || '-4334184638';
 
 const PRICES = {
   '1 день':  50,
@@ -57,32 +57,26 @@ async function checkSubscription(ctx) {
 }
 
 function subKeyboard() {
-  const username = CHANNEL.replace('@', '');
   return Markup.inlineKeyboard([
-    [Markup.button.url('📢 Подписаться на канал', 'https://t.me/' + username)],
+    [Markup.button.url('📢 Подписаться на канал', 'https://t.me/+RuUi5d5vJghhODJh')],
     [Markup.button.callback('✅ Я подписался', 'check_sub')]
   ]);
 }
 
 // ============================================================
-// MIDDLEWARE — проверка подписки перед командами
+// MIDDLEWARE — проверка подписки
 // ============================================================
 bot.use(async (ctx, next) => {
-  // Админ пропускает всё
   if (ctx.from && ctx.from.id === ADMIN_ID) return next();
-
-  // Callback "Я подписался" пропускаем
   if (ctx.callbackQuery && ctx.callbackQuery.data === 'check_sub') return next();
 
-  // /start — своя проверка внутри
   const msg = ctx.message?.text || '';
   if (msg.startsWith('/start')) return next();
 
-  // Проверяем подписку
   const isSubbed = await checkSubscription(ctx);
   if (!isSubbed) {
     return ctx.reply(
-      `📢 *Подпишись на канал* ${CHANNEL}\n\n` +
+      `📢 *Подпишись на канал*\n\n` +
       `Чтобы пользоваться ботом — подпишись и нажми «✅ Я подписался».`,
       { parse_mode: 'Markdown', ...subKeyboard() }
     );
@@ -113,7 +107,7 @@ bot.start(async (ctx) => {
     if (!isSubbed) {
       return ctx.reply(
         `👋 Привет, ${name}!\n\n` +
-        `📢 *Подпишись на канал* ${CHANNEL}, чтобы пользоваться ботом.\n\n` +
+        `📢 *Подпишись на канал*, чтобы пользоваться ботом.\n\n` +
         `После подписки нажми «✅ Я подписался».`,
         { parse_mode: 'Markdown', ...subKeyboard() }
       );
@@ -133,7 +127,7 @@ bot.start(async (ctx) => {
 });
 
 // ============================================================
-// КНОПКА "Я ПОДПИСАЛСЯ"
+// "Я ПОДПИСАЛСЯ"
 // ============================================================
 bot.action('check_sub', async (ctx) => {
   const isSubbed = await checkSubscription(ctx);
@@ -160,7 +154,6 @@ bot.hears('❓ Помощь', async (ctx) => {
     `📝 /review — оставить отзыв\n` +
     `📖 /reviews — читать отзывы\n` +
     `👤 /profile — профиль\n\n` +
-    `📢 Канал: ${CHANNEL}\n` +
     `💬 Связь: @rocket_admin`,
     { parse_mode: 'Markdown' }
   );
