@@ -1,6 +1,7 @@
 // ============================================================
 // ManifestTools Telegram Bot
 // Rocket Way // 20.05.2026
+// + Force Subscribe + My Keys
 // ============================================================
 
 const { Telegraf, Markup } = require('telegraf');
@@ -11,6 +12,7 @@ const ADMIN_ID    = parseInt(process.env.ADMIN_ID || '8640716370');
 const API_URL     = process.env.API_URL     || 'https://manifest-keys-1.onrender.com';
 const BOT_SECRET  = process.env.BOT_SECRET  || 'Manifest_tools_key_1120';
 const CARD_NUMBER = process.env.CARD_NUMBER || '2203 8302 7007 4520';
+const CHANNEL     = process.env.CHANNEL     || '@manifest_tools_news';
 
 const PRICES = {
   '1 день':  50,
@@ -41,12 +43,62 @@ async function apiGet(path) {
 }
 
 // ============================================================
+// ПРОВЕРКА ПОДПИСКИ
+// ============================================================
+async function checkSubscription(ctx) {
+  try {
+    const member = await ctx.telegram.getChatMember(CHANNEL, ctx.from.id);
+    const s = member.status;
+    return (s === 'member' || s === 'administrator' || s === 'creator');
+  } catch (e) {
+    console.log('[checkSub] error:', e.message);
+    return false;
+  }
+}
+
+function subKeyboard() {
+  const username = CHANNEL.replace('@', '');
+  return Markup.inlineKeyboard([
+    [Markup.button.url('📢 Подписаться на канал', 'https://t.me/' + username)],
+    [Markup.button.callback('✅ Я подписался', 'check_sub')]
+  ]);
+}
+
+// ============================================================
+// MIDDLEWARE — проверка подписки перед командами
+// ============================================================
+bot.use(async (ctx, next) => {
+  // Админ пропускает всё
+  if (ctx.from && ctx.from.id === ADMIN_ID) return next();
+
+  // Callback "Я подписался" пропускаем
+  if (ctx.callbackQuery && ctx.callbackQuery.data === 'check_sub') return next();
+
+  // /start — своя проверка внутри
+  const msg = ctx.message?.text || '';
+  if (msg.startsWith('/start')) return next();
+
+  // Проверяем подписку
+  const isSubbed = await checkSubscription(ctx);
+  if (!isSubbed) {
+    return ctx.reply(
+      `📢 *Подпишись на канал* ${CHANNEL}\n\n` +
+      `Чтобы пользоваться ботом — подпишись и нажми «✅ Я подписался».`,
+      { parse_mode: 'Markdown', ...subKeyboard() }
+    );
+  }
+
+  return next();
+});
+
+// ============================================================
 // МЕНЮ
 // ============================================================
 function mainMenu() {
   return Markup.keyboard([
-    ['🛒 Купить ключ', '📝 Отзывы'],
-    ['👤 Профиль', '❓ Помощь']
+    ['🛒 Купить ключ', '🔑 Мои ключи'],
+    ['📝 Отзывы', '👤 Профиль'],
+    ['❓ Помощь']
   ]).resize();
 }
 
@@ -55,6 +107,19 @@ function mainMenu() {
 // ============================================================
 bot.start(async (ctx) => {
   const name = ctx.from.first_name || 'друг';
+
+  if (ctx.from.id !== ADMIN_ID) {
+    const isSubbed = await checkSubscription(ctx);
+    if (!isSubbed) {
+      return ctx.reply(
+        `👋 Привет, ${name}!\n\n` +
+        `📢 *Подпишись на канал* ${CHANNEL}, чтобы пользоваться ботом.\n\n` +
+        `После подписки нажми «✅ Я подписался».`,
+        { parse_mode: 'Markdown', ...subKeyboard() }
+      );
+    }
+  }
+
   await ctx.reply(
     `👋 Привет, ${name}!\n\n` +
     `Это магазин ключей *ManifestTools*.\n\n` +
@@ -68,16 +133,35 @@ bot.start(async (ctx) => {
 });
 
 // ============================================================
+// КНОПКА "Я ПОДПИСАЛСЯ"
+// ============================================================
+bot.action('check_sub', async (ctx) => {
+  const isSubbed = await checkSubscription(ctx);
+  if (isSubbed) {
+    await ctx.answerCbQuery('✅ Спасибо за подписку!');
+    try { await ctx.deleteMessage(); } catch (e) {}
+    await ctx.reply(
+      `✅ *Спасибо!* Теперь можешь пользоваться ботом.`,
+      { parse_mode: 'Markdown', ...mainMenu() }
+    );
+  } else {
+    await ctx.answerCbQuery('❌ Ты ещё не подписан!', { show_alert: true });
+  }
+});
+
+// ============================================================
 // ПОМОЩЬ
 // ============================================================
 bot.hears('❓ Помощь', async (ctx) => {
   await ctx.reply(
     `❓ *Помощь*\n\n` +
     `🛒 /buy — купить ключ\n` +
+    `🔑 /mykeys — мои ключи\n` +
     `📝 /review — оставить отзыв\n` +
     `📖 /reviews — читать отзывы\n` +
     `👤 /profile — профиль\n\n` +
-    `Связь: @rocket_admin`,
+    `📢 Канал: ${CHANNEL}\n` +
+    `💬 Связь: @rocket_admin`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -92,9 +176,58 @@ async function showProfile(ctx) {
   await ctx.reply(
     `👤 *Твой профиль*\n\n` +
     `🆔 ID: \`${ctx.from.id}\`\n` +
-    `📛 @${ctx.from.username || 'нет'}`,
+    `📛 @${ctx.from.username || 'нет'}\n\n` +
+    `🔑 Посмотреть ключи: /mykeys`,
     { parse_mode: 'Markdown' }
   );
+}
+
+// ============================================================
+// МОИ КЛЮЧИ
+// ============================================================
+bot.hears('🔑 Мои ключи', showMyKeys);
+bot.command('mykeys', showMyKeys);
+
+async function showMyKeys(ctx) {
+  const r = await apiGet('/api/bot/mykeys?tgId=' + ctx.from.id);
+
+  if (!r.ok) return ctx.reply('❌ Ошибка сервера');
+
+  if (!r.keys || r.keys.length === 0) {
+    return ctx.reply(
+      `🔑 *Мои ключи*\n\n` +
+      `У тебя пока нет купленных ключей.\n\n` +
+      `Купить: /buy`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  let text = `🔑 *Мои ключи (${r.keys.length}):*\n\n`;
+
+  r.keys.forEach((k, i) => {
+    const date = new Date(+k.paid_at).toLocaleDateString('ru-RU');
+    let status = '🟢 Активен';
+
+    if (k.used === 1) {
+      if (k.expires && Date.now() > +k.expires) {
+        status = '🔴 Истёк';
+      } else if (k.expires) {
+        const daysLeft = Math.ceil((+k.expires - Date.now()) / 86400000);
+        status = `🟡 Использован (осталось ${daysLeft} дн.)`;
+      } else {
+        status = '🟡 Использован';
+      }
+    }
+
+    text += `*${i + 1}.* \`${k.key_value}\`\n`;
+    text += `   📦 ${k.duration} • 💰 ${k.price} ₽\n`;
+    text += `   ${status}\n`;
+    text += `   📅 ${date}\n\n`;
+  });
+
+  text += `_Нажми на ключ — скопируется_`;
+
+  await ctx.reply(text, { parse_mode: 'Markdown' });
 }
 
 // ============================================================
@@ -218,6 +351,7 @@ bot.action(/^approve_(\d+)$/, async (ctx) => {
       `📦 Тариф: *${order.duration}*\n` +
       `💰 ${order.price} ₽\n\n` +
       `🔑 Введи при запуске чита.\n\n` +
+      `🔑 Все ключи: /mykeys\n` +
       `📝 Оставь отзыв: /review`,
       { parse_mode: 'Markdown' }
     );
@@ -267,7 +401,10 @@ bot.command('review', async (ctx) => {
 // ============================================================
 // ОТЗЫВЫ
 // ============================================================
-bot.command('reviews', async (ctx) => {
+bot.hears('📝 Отзывы', showReviews);
+bot.command('reviews', showReviews);
+
+async function showReviews(ctx) {
   const r = await apiGet('/api/bot/reviews');
   if (!r.ok || !r.reviews || r.reviews.length === 0) {
     return ctx.reply('📭 Пока нет отзывов.');
@@ -279,7 +416,7 @@ bot.command('reviews', async (ctx) => {
   });
 
   await ctx.reply(text, { parse_mode: 'Markdown' });
-});
+}
 
 // ============================================================
 // ОБРАБОТКА ТЕКСТА
@@ -346,6 +483,7 @@ bot.command('orders', async (ctx) => {
 bot.launch().then(() => {
   console.log('[ManifestBot] Запущен');
   console.log('[ManifestBot] Admin ID:', ADMIN_ID);
+  console.log('[ManifestBot] Channel:', CHANNEL);
 });
 
 process.once('SIGINT',  () => bot.stop('SIGINT'));
