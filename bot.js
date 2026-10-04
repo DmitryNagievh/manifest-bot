@@ -6,6 +6,7 @@
 
 const { Telegraf, Markup } = require('telegraf');
 const fetch = require('node-fetch');
+const http = require('http');
 
 const BOT_TOKEN   = process.env.BOT_TOKEN   || '8885490824:AAEN2oSrKhe2uXVQtxMm7MWQUoByZc833Uo';
 const ADMIN_ID    = parseInt(process.env.ADMIN_ID || '8640716370');
@@ -13,6 +14,7 @@ const API_URL     = process.env.API_URL     || 'https://manifest-keys-1.onrender
 const BOT_SECRET  = process.env.BOT_SECRET  || 'Manifest_tools_key_1120';
 const CARD_NUMBER = process.env.CARD_NUMBER || '2203 8302 7007 4520';
 const CHANNEL     = process.env.CHANNEL     || '-4334184638';
+const PORT        = process.env.PORT        || 3000;
 
 const PRICES = {
   '1 день':  50,
@@ -64,7 +66,7 @@ function subKeyboard() {
 }
 
 // ============================================================
-// MIDDLEWARE — проверка подписки
+// MIDDLEWARE
 // ============================================================
 bot.use(async (ctx, next) => {
   if (ctx.from && ctx.from.id === ADMIN_ID) return next();
@@ -471,12 +473,22 @@ bot.command('orders', async (ctx) => {
 });
 
 // ============================================================
-// ЗАПУСК
+// ЗАПУСК БОТА
 // ============================================================
 bot.launch().then(() => {
   console.log('[ManifestBot] Запущен');
   console.log('[ManifestBot] Admin ID:', ADMIN_ID);
   console.log('[ManifestBot] Channel:', CHANNEL);
+});
+
+// ============================================================
+// HTTP СЕРВЕР (для Render — требует открытый порт)
+// ============================================================
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('ManifestTools Bot OK');
+}).listen(PORT, () => {
+  console.log('[ManifestBot] HTTP server on port ' + PORT);
 });
 
 process.once('SIGINT',  () => bot.stop('SIGINT'));
